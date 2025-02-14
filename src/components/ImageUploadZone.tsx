@@ -43,18 +43,48 @@ const models = [
   },
 ];
 
+const FilledLayerIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" className="fill-current">
+    <path d="M20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14z" />
+    <path d="M6 7h12v10H6z" />
+  </svg>
+);
+
+const StrokedLayerIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    width="24"
+    height="24"
+    className="stroke-current fill-none stroke-2"
+  >
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+  </svg>
+);
+
 const outputTypes = [
   {
     id: "filled",
     label: "Filled Layers",
     description: "Color filled vector elements",
-    options: ["Simple", "Detailed", "Complex", "Ultra"],
+    icon: <FilledLayerIcon />,
+    options: [
+      { transform: "rotate(0)" },
+      { transform: "rotate(45deg)" },
+      { transform: "rotate(90deg)" },
+      { transform: "rotate(135deg)" },
+    ],
   },
   {
     id: "stroked",
     label: "Stroked Layers",
     description: "Color bordered vector elements",
-    options: ["Simple", "Detailed", "Complex", "Ultra"],
+    icon: <StrokedLayerIcon />,
+    options: [
+      { transform: "rotate(0)" },
+      { transform: "rotate(45deg)" },
+      { transform: "scale(0.8)" },
+      { transform: "scale(0.6)" },
+    ],
   },
 ];
 
@@ -77,7 +107,7 @@ const ImageUploadZone = ({
   const [selectedModel, setSelectedModel] = useState("photo");
   const [detailLevel, setDetailLevel] = useState("Maximum");
   const [selectedOutputType, setSelectedOutputType] = useState("filled");
-  const [selectedOutputOption, setSelectedOutputOption] = useState("Simple");
+  const [selectedOutputOption, setSelectedOutputOption] = useState(0);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -147,31 +177,41 @@ const ImageUploadZone = ({
           </div>
 
           {/* Output Type Selection */}
-          <div className="flex gap-4">
+          <div className="flex gap-8">
             {outputTypes.map((type) => (
               <div key={type.id} className="text-center">
-                <div className="text-sm font-medium mb-1">{type.label}</div>
-                <div className="text-xs text-gray-500 mb-2">
-                  {type.description}
+                <div className="flex flex-col items-center gap-1">
+                  <div className="w-8 h-8">{type.icon}</div>
+                  <div className="text-sm font-medium">{type.label}</div>
+                  <div className="text-xs text-gray-500 mb-2">
+                    {type.description}
+                  </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 justify-center">
                   {type.options.map((option, index) => (
                     <Button
-                      key={`${type.id}-${option}`}
+                      key={`${type.id}-${index}`}
                       variant={
                         selectedOutputType === type.id &&
-                        selectedOutputOption === option
+                        selectedOutputOption === index
                           ? "default"
                           : "outline"
                       }
                       size="sm"
-                      className="p-2 h-8 w-8"
+                      className="p-1 h-8 w-8"
                       onClick={() => {
                         setSelectedOutputType(type.id);
-                        setSelectedOutputOption(option);
+                        setSelectedOutputOption(index);
                       }}
                     >
-                      {index + 1}
+                      <div
+                        className="w-4 h-4"
+                        style={{
+                          transform: option.transform,
+                        }}
+                      >
+                        {type.icon}
+                      </div>
                     </Button>
                   ))}
                 </div>
