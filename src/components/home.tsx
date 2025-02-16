@@ -60,7 +60,7 @@ const Home = () => {
           onColorCountChange={setColorCount}
           onColorChange={handleColorChange}
           colorCount={colorCount}
-          colors={colors}
+          originalImage={originalImage}
         />
 
         <Card className="p-6 bg-white shadow-md">

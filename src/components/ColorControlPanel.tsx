@@ -18,7 +18,8 @@ import { Checkbox } from "./ui/checkbox";
 interface ColorControlPanelProps {
   onColorCountChange?: (count: number) => void;
   colorCount?: number;
-  imageColors?: { [key: number]: string[] };
+  originalImage?: string;
+  onColorChange?: (index: number, color: string) => void;
 }
 
 const colorOptions = [1, 2, 4, 6, 8, 12, 16, 24, 28, 32, 36, 50, 99];
@@ -40,8 +41,71 @@ const generateColorPalette = (count: number) => {
 const ColorControlPanel = ({
   onColorCountChange = () => {},
   colorCount = 32,
-  imageColors = {},
+  originalImage,
+  onColorChange = () => {},
 }: ColorControlPanelProps) => {
+  const [dominantColors, setDominantColors] = React.useState<string[]>([]);
+  const [outputColors, setOutputColors] = React.useState<string[]>([]);
+
+  // Extract dominant colors from the image
+  React.useEffect(() => {
+    if (originalImage) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const colors = extractDominantColors(imageData.data, 32);
+        setDominantColors(colors);
+      };
+      img.src = originalImage;
+    }
+  }, [originalImage]);
+
+  // Update output colors when color count changes
+  React.useEffect(() => {
+    if (dominantColors.length > 0) {
+      const newColors = dominantColors.slice(0, colorCount);
+      setOutputColors(newColors);
+      newColors.forEach((color, index) => onColorChange(index, color));
+    }
+  }, [colorCount, dominantColors]);
+
+  // Function to extract dominant colors from image data
+  const extractDominantColors = (
+    data: Uint8ClampedArray,
+    maxColors: number,
+  ): string[] => {
+    const colorMap = new Map<string, number>();
+
+    // Sample every 4th pixel for performance
+    for (let i = 0; i < data.length; i += 16) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+
+      // Quantize colors to reduce number of unique colors
+      const quantizedR = Math.round(r / 32) * 32;
+      const quantizedG = Math.round(g / 32) * 32;
+      const quantizedB = Math.round(b / 32) * 32;
+
+      const colorKey = `rgb(${quantizedR},${quantizedG},${quantizedB})`;
+      colorMap.set(colorKey, (colorMap.get(colorKey) || 0) + 1);
+    }
+
+    // Sort colors by frequency and take top N
+    return Array.from(colorMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxColors)
+      .map(([color]) => color);
+  };
   const [contourDetection, setContourDetection] = useState(false);
 
   return (
@@ -86,16 +150,12 @@ const ColorControlPanel = ({
                       {option}:
                     </Label>
                     <div className="flex flex-wrap gap-0 mt-1">
-                      {generateColorPalette(option).map((row, rowIndex) => (
-                        <div key={rowIndex} className="flex gap-0">
-                          {row.map((color, colIndex) => (
-                            <div
-                              key={colIndex}
-                              className="w-4 h-4"
-                              style={{ backgroundColor: color }}
-                            />
-                          ))}
-                        </div>
+                      {dominantColors.slice(0, option).map((color, index) => (
+                        <div
+                          key={index}
+                          className="w-4 h-4"
+                          style={{ backgroundColor: color }}
+                        />
                       ))}
                     </div>
                   </div>
@@ -176,17 +236,13 @@ const ColorControlPanel = ({
             </div>
 
             <div className="grid grid-cols-8 gap-2">
-              {Array(32)
-                .fill(0)
-                .map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-8 h-8 rounded-full"
-                    style={{
-                      backgroundColor: `hsl(${(i * 360) / 32}, 70%, ${50 + (i % 2) * 20}%)`,
-                    }}
-                  />
-                ))}
+              {outputColors.map((color, i) => (
+                <div
+                  key={i}
+                  className="w-8 h-8 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
             </div>
           </div>
         </div>

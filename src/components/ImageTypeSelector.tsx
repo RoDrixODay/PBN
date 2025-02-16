@@ -7,8 +7,16 @@ import {
   FileImage,
   Layers,
   Square,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 export type ImageType =
   | "clipart"
@@ -123,6 +131,28 @@ const ImageTypeSelector = ({
                           {type.description}
                         </div>
                       </div>
+                      <Select
+                        value={detailLevel.toString()}
+                        onValueChange={(value) =>
+                          onDetailLevelChange?.(Number(value))
+                        }
+                      >
+                        <SelectTrigger className="w-[140px] h-8 text-xs">
+                          <div className="flex items-center justify-between w-full">
+                            <span>Detail Level</span>
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="7">Maximum (Default)</SelectItem>
+                          <SelectItem value="6">Ultra</SelectItem>
+                          <SelectItem value="5">Very High</SelectItem>
+                          <SelectItem value="4">High</SelectItem>
+                          <SelectItem value="3">Medium</SelectItem>
+                          <SelectItem value="2">Low</SelectItem>
+                          <SelectItem value="1">Minimum</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </Card>
                 ))}
@@ -176,22 +206,6 @@ const ImageTypeSelector = ({
           </div>
         </div>
       </div>
-
-      {selectedTypeData?.showDetailLevel && (
-        <div className="flex items-center gap-2">
-          <select
-            value={detailLevel}
-            onChange={(e) => onDetailLevelChange?.(Number(e.target.value))}
-            className="form-select block w-48 text-sm border-gray-300 rounded-md focus:ring-primary focus:border-primary"
-          >
-            {detailLevels.map((level) => (
-              <option key={level.value} value={level.value}>
-                {level.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
     </div>
   );
 };
