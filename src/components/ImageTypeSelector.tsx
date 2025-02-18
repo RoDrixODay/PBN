@@ -100,6 +100,82 @@ const ImageTypeSelector = ({
 }: ImageTypeSelectorProps) => {
   const selectedTypeData = imageTypes.find((type) => type.id === selectedType);
 
+  const handleOverlapClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Select filled type and trigger processing
+    onTypeSelect("filled");
+
+    // Get the canvas and apply overlap processing
+    const canvas = document.querySelector("canvas");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        // Clear any existing processing
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+
+          // Apply overlap algorithm
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          const width = canvas.width;
+          const height = canvas.height;
+
+          // Extract and sort colors by frequency
+          const colorMap = new Map<
+            string,
+            { color: number[]; count: number }
+          >();
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const key = `${r},${g},${b}`;
+
+            if (!colorMap.has(key)) {
+              colorMap.set(key, { color: [r, g, b], count: 1 });
+            } else {
+              colorMap.get(key)!.count++;
+            }
+          }
+
+          // Create and stack color layers
+          const sortedColors = Array.from(colorMap.entries())
+            .sort((a, b) => b[1].count - a[1].count)
+            .slice(0, 32)
+            .map(([_, value]) => value.color);
+
+          ctx.clearRect(0, 0, width, height);
+          sortedColors.forEach((color) => {
+            const layerCanvas = document.createElement("canvas");
+            layerCanvas.width = width;
+            layerCanvas.height = height;
+            const layerCtx = layerCanvas.getContext("2d")!;
+            const layerData = ctx.createImageData(width, height);
+
+            for (let i = 0; i < data.length; i += 4) {
+              if (
+                Math.abs(data[i] - color[0]) < 30 &&
+                Math.abs(data[i + 1] - color[1]) < 30 &&
+                Math.abs(data[i + 2] - color[2]) < 30
+              ) {
+                layerData.data[i] = color[0];
+                layerData.data[i + 1] = color[1];
+                layerData.data[i + 2] = color[2];
+                layerData.data[i + 3] = 255;
+              }
+            }
+
+            layerCtx.putImageData(layerData, 0, 0);
+            ctx.drawImage(layerCanvas, 0, 0);
+          });
+        };
+        img.src = canvas.toDataURL();
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex gap-6">
@@ -144,13 +220,14 @@ const ImageTypeSelector = ({
                           </div>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="7">Maximum (Default)</SelectItem>
-                          <SelectItem value="6">Ultra</SelectItem>
-                          <SelectItem value="5">Very High</SelectItem>
-                          <SelectItem value="4">High</SelectItem>
-                          <SelectItem value="3">Medium</SelectItem>
-                          <SelectItem value="2">Low</SelectItem>
-                          <SelectItem value="1">Minimum</SelectItem>
+                          {detailLevels.map((level) => (
+                            <SelectItem
+                              key={level.value}
+                              value={level.value.toString()}
+                            >
+                              {level.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -185,10 +262,118 @@ const ImageTypeSelector = ({
                       </div>
                       {type.id === "filled" && (
                         <div className="flex gap-2 mt-2">
-                          <div className="w-6 h-6 bg-gray-900 rounded" />
-                          <div className="w-6 h-6 bg-gray-700 rounded" />
-                          <div className="w-6 h-6 bg-gray-500 rounded" />
-                          <div className="w-6 h-6 bg-gray-300 rounded" />
+                          <button
+                            onClick={handleOverlapClick}
+                            className="w-6 h-6 bg-gray-900 rounded hover:ring-2 hover:ring-primary cursor-pointer"
+                            title="Overlap - Stack colors in order of frequency"
+                          />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Select filled type and trigger processing with FULL overlap
+                              onTypeSelect("filled");
+
+                              const canvas = document.querySelector("canvas");
+                              if (canvas) {
+                                const ctx = canvas.getContext("2d");
+                                if (ctx) {
+                                  const img = new Image();
+                                  img.onload = () => {
+                                    ctx.clearRect(
+                                      0,
+                                      0,
+                                      canvas.width,
+                                      canvas.height,
+                                    );
+                                    ctx.drawImage(img, 0, 0);
+
+                                    const imageData = ctx.getImageData(
+                                      0,
+                                      0,
+                                      canvas.width,
+                                      canvas.height,
+                                    );
+                                    const data = imageData.data;
+                                    const width = canvas.width;
+                                    const height = canvas.height;
+
+                                    // Extract and sort colors with FULL overlap
+                                    const colorMap = new Map<
+                                      string,
+                                      { color: number[]; count: number }
+                                    >();
+                                    for (let i = 0; i < data.length; i += 4) {
+                                      const r = data[i];
+                                      const g = data[i + 1];
+                                      const b = data[i + 2];
+                                      const key = `${r},${g},${b}`;
+
+                                      if (!colorMap.has(key)) {
+                                        colorMap.set(key, {
+                                          color: [r, g, b],
+                                          count: 1,
+                                        });
+                                      } else {
+                                        colorMap.get(key)!.count++;
+                                      }
+                                    }
+
+                                    const sortedColors = Array.from(
+                                      colorMap.entries(),
+                                    )
+                                      .sort((a, b) => b[1].count - a[1].count)
+                                      .slice(0, 32)
+                                      .map(([_, value]) => value.color);
+
+                                    ctx.clearRect(0, 0, width, height);
+
+                                    // Apply FULL overlap - larger tolerance and more aggressive merging
+                                    sortedColors.forEach((color) => {
+                                      const layerCanvas =
+                                        document.createElement("canvas");
+                                      layerCanvas.width = width;
+                                      layerCanvas.height = height;
+                                      const layerCtx =
+                                        layerCanvas.getContext("2d")!;
+                                      const layerData = ctx.createImageData(
+                                        width,
+                                        height,
+                                      );
+
+                                      for (let i = 0; i < data.length; i += 4) {
+                                        // Increased color tolerance for more aggressive merging
+                                        if (
+                                          Math.abs(data[i] - color[0]) < 60 &&
+                                          Math.abs(data[i + 1] - color[1]) <
+                                            60 &&
+                                          Math.abs(data[i + 2] - color[2]) < 60
+                                        ) {
+                                          layerData.data[i] = color[0];
+                                          layerData.data[i + 1] = color[1];
+                                          layerData.data[i + 2] = color[2];
+                                          layerData.data[i + 3] = 255;
+                                        }
+                                      }
+
+                                      layerCtx.putImageData(layerData, 0, 0);
+                                      ctx.drawImage(layerCanvas, 0, 0);
+                                    });
+                                  };
+                                  img.src = canvas.toDataURL();
+                                }
+                              }
+                            }}
+                            className="w-6 h-6 bg-gray-700 rounded hover:ring-2 hover:ring-primary cursor-pointer"
+                            title="Merge - Same as Overlap but with FULL overlap parameter"
+                          />
+                          <button
+                            className="w-6 h-6 bg-gray-500 rounded hover:ring-2 hover:ring-primary cursor-pointer"
+                            title="Coming soon"
+                          />
+                          <button
+                            className="w-6 h-6 bg-gray-300 rounded hover:ring-2 hover:ring-primary cursor-pointer"
+                            title="Coming soon"
+                          />
                         </div>
                       )}
                       {type.id === "stroked" && (

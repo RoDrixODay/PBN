@@ -38,6 +38,8 @@ const generateColorPalette = (count: number) => {
   });
 };
 
+import ControlPanel from "./ControlPanel";
+
 const ColorControlPanel = ({
   onColorCountChange = () => {},
   colorCount = 32,
@@ -46,6 +48,10 @@ const ColorControlPanel = ({
 }: ColorControlPanelProps) => {
   const [dominantColors, setDominantColors] = React.useState<string[]>([]);
   const [outputColors, setOutputColors] = React.useState<string[]>([]);
+  const [contourDetection, setContourDetection] = useState(false);
+  const [outlineThickness, setOutlineThickness] = useState(2);
+  const [showNumbers, setShowNumbers] = useState(true);
+  const [fontSize, setFontSize] = useState(12);
 
   // Extract dominant colors from the image
   React.useEffect(() => {
@@ -106,31 +112,45 @@ const ColorControlPanel = ({
       .slice(0, maxColors)
       .map(([color]) => color);
   };
-  const [contourDetection, setContourDetection] = useState(false);
-
   return (
-    <div className="flex gap-6">
-      {/* Input Options */}
-      <Card className="flex-1 p-4 bg-white shadow-md">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Input Options:</h3>
-            <Tabs defaultValue="palettes" className="w-[200px]">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="palettes">Color Palettes</TabsTrigger>
-                <TabsTrigger value="background">Background</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
+    <div className="space-y-4">
+      <ControlPanel
+        outlineThickness={outlineThickness}
+        showNumbers={showNumbers}
+        fontSize={fontSize}
+        onOutlineThicknessChange={setOutlineThickness}
+        onShowNumbersChange={setShowNumbers}
+        onFontSizeChange={setFontSize}
+        onDownload={() => {
+          console.log("Downloading image...");
+        }}
+        colorPalette={outputColors}
+      />
+      <div className="flex gap-6">
+        {/* Input Options */}
+        <Card className="flex-1 p-4 bg-white shadow-md h-2 h-[578]">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label>Colors: {colorCount}</Label>
-              <Button variant="outline" size="sm" className="h-7 text-xs">
-                Custom Palette
-              </Button>
+              <h3 className="text-lg font-medium">Input Options:</h3>
+              <Tabs defaultValue="palettes" className="w-[200px]">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="palettes">Color Palettes</TabsTrigger>
+                  <TabsTrigger value="background">Background</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
-
+          </div>
+          <div className="flex justify-start items-center">
+            <Label>Colors: {colorCount}</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs text-center flex-row items-center gap-x-0.5"
+            >
+              Custom Palette
+            </Button>
+          </div>
+          <div className="space-y-4 flex justify-start">
             <RadioGroup
               value={colorCount.toString()}
               onValueChange={(value) => onColorCountChange(parseInt(value))}
@@ -162,91 +182,89 @@ const ColorControlPanel = ({
                 </div>
               ))}
             </RadioGroup>
-
-            <div className="space-y-2">
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="contour"
+                checked={contourDetection}
+                onCheckedChange={(checked) =>
+                  setContourDetection(checked as boolean)
+                }
+              />
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="contour"
-                  checked={contourDetection}
-                  onCheckedChange={(checked) =>
-                    setContourDetection(checked as boolean)
-                  }
-                />
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="contour" className="text-sm font-normal">
-                    Contour Detection
-                  </Label>
-                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
-                    Beta Feature
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-1 text-sm text-gray-600 pl-6">
-                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <p>
-                  Enhance the recognition of fine lines and edges in the image,
-                  ideal for detailed illustrations.
-                </p>
+                <Label htmlFor="contour" className="text-sm font-normal">
+                  Contour Detection
+                </Label>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                  Beta Feature
+                </span>
               </div>
             </div>
+            <div className="flex items-start gap-1 text-sm text-gray-600 pl-6">
+              <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <p>
+                Enhance the recognition of fine lines and edges in the image,
+                ideal for detailed illustrations.
+              </p>
+            </div>
           </div>
-        </div>
-      </Card>
-
-      {/* Output Options */}
-      <Card className="flex-1 p-4 bg-white shadow-md">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">Output Options:</h3>
-            <Tabs defaultValue="colors" className="w-[200px]">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="colors">Color Groups</TabsTrigger>
-                <TabsTrigger value="gradients">Gradients</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
+        </Card>
+        {/* Output Options */}
+        <Card className="flex-1 p-4 bg-white shadow-md">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label>Colors: {colorCount}</Label>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-7 w-7">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </Button>
-                <Select defaultValue="5">
-                  <SelectTrigger className="w-[80px] h-7">
-                    <SelectValue placeholder="5%" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5%</SelectItem>
-                    <SelectItem value="10">10%</SelectItem>
-                    <SelectItem value="15">15%</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <h3 className="text-lg font-medium">Output Options:</h3>
+              <Tabs defaultValue="colors" className="w-[200px]">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="colors">Color Groups</TabsTrigger>
+                  <TabsTrigger value="gradients">Gradients</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
-            <div className="grid grid-cols-8 gap-2">
-              {outputColors.map((color, i) => (
-                <div
-                  key={i}
-                  className="w-8 h-8 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Colors: {colorCount}</Label>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" className="h-7 w-7">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </Button>
+                  <Select defaultValue="5">
+                    <SelectTrigger className="w-[80px] h-7">
+                      <SelectValue placeholder="5%" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5%</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="15">15%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-8 gap-2">
+                {outputColors.map((color, i) => (
+                  <div
+                    key={i}
+                    className="w-8 h-8 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 };

@@ -226,6 +226,105 @@ const processDrawing = (ctx: CanvasRenderingContext2D, detailLevel: number) => {
   ctx.putImageData(imageData, 0, 0);
 };
 
+interface UpscaleOptions {
+  targetWidth?: number;
+  targetHeight?: number;
+  preserveAspectRatio?: boolean;
+  quality?: "low" | "medium" | "high";
+}
+
+// Function to upscale image using high-quality interpolation
+export const upscaleImage = async (
+  sourceCanvas: HTMLCanvasElement,
+  options: UpscaleOptions = {},
+): Promise<HTMLCanvasElement> => {
+  const {
+    targetWidth = 1920,
+    targetHeight = 1080,
+    preserveAspectRatio = true,
+    quality = "high",
+  } = options;
+
+  // Calculate dimensions maintaining aspect ratio if needed
+  let finalWidth = targetWidth;
+  let finalHeight = targetHeight;
+
+  if (preserveAspectRatio) {
+    const aspectRatio = sourceCanvas.width / sourceCanvas.height;
+    if (targetWidth / targetHeight > aspectRatio) {
+      finalWidth = Math.round(targetHeight * aspectRatio);
+    } else {
+      finalHeight = Math.round(targetWidth / aspectRatio);
+    }
+  }
+
+  // Create intermediate canvas for multi-step upscaling
+  const steps = quality === "high" ? 3 : quality === "medium" ? 2 : 1;
+  let currentCanvas = sourceCanvas;
+
+  for (let i = 0; i < steps; i++) {
+    const stepCanvas = document.createElement("canvas");
+    const stepCtx = stepCanvas.getContext("2d")!;
+
+    // Calculate intermediate size
+    const progress = (i + 1) / steps;
+    const stepWidth = Math.round(
+      sourceCanvas.width + (finalWidth - sourceCanvas.width) * progress,
+    );
+    const stepHeight = Math.round(
+      sourceCanvas.height + (finalHeight - sourceCanvas.height) * progress,
+    );
+
+    stepCanvas.width = stepWidth;
+    stepCanvas.height = stepHeight;
+
+    // Apply high-quality interpolation
+    stepCtx.imageSmoothingEnabled = true;
+    stepCtx.imageSmoothingQuality = "high";
+
+    // Draw with bicubic-like interpolation
+    stepCtx.drawImage(currentCanvas, 0, 0, stepWidth, stepHeight);
+
+    // Apply sharpening if needed
+    if (quality === "high") {
+      const imageData = stepCtx.getImageData(0, 0, stepWidth, stepHeight);
+      applySharpening(imageData);
+      stepCtx.putImageData(imageData, 0, 0);
+    }
+
+    currentCanvas = stepCanvas;
+  }
+
+  return currentCanvas;
+};
+
+// Helper function to apply sharpening
+const applySharpening = (imageData: ImageData) => {
+  const data = imageData.data;
+  const width = imageData.width;
+  const height = imageData.height;
+  const sharpenMatrix = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+
+  const tempData = new Uint8ClampedArray(data);
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = (y * width + x) * 4;
+
+      for (let c = 0; c < 3; c++) {
+        let val = 0;
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const pidx = ((y + ky) * width + (x + kx)) * 4 + c;
+            val += tempData[pidx] * sharpenMatrix[(ky + 1) * 3 + (kx + 1)];
+          }
+        }
+        data[idx + c] = Math.min(255, Math.max(0, val));
+      }
+    }
+  }
+};
+
 export const processImage = async (
   file: File,
   options: ProcessImageOptions,
@@ -246,11 +345,6 @@ export const processImage = async (
     ctx: CanvasRenderingContext2D,
     detailLevel: number,
   ) => {
-    // Map detail level to processing parameters
-    const normalizedLevel = (detailLevel - 1) / 6; // 0 to 1
-    const colorCount = Math.max(2, Math.round(2 + normalizedLevel * 6)); // 2 to 8 colors
-    const threshold = 128 + normalizedLevel * 64; // 128 to 192
-
     const imageData = ctx.getImageData(
       0,
       0,
@@ -258,22 +352,68 @@ export const processImage = async (
       ctx.canvas.height,
     );
     const data = imageData.data;
+    const width = ctx.canvas.width;
+    const height = ctx.canvas.height;
 
-    // Convert to grayscale first
+    // Step 1: Extract unique colors and create color map
+    const colorMap = new Map<string, { color: number[]; count: number }>();
     for (let i = 0; i < data.length; i += 4) {
-      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      data[i] = data[i + 1] = data[i + 2] = gray;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const key = `${r},${g},${b}`;
+
+      if (!colorMap.has(key)) {
+        colorMap.set(key, { color: [r, g, b], count: 1 });
+      } else {
+        colorMap.get(key)!.count++;
+      }
     }
 
-    // Create layers based on intensity
-    const step = 256 / colorCount;
-    for (let i = 0; i < data.length; i += 4) {
-      const layer = Math.floor(data[i] / step);
-      const value = Math.min(255, layer * step + step / 2);
-      data[i] = data[i + 1] = data[i + 2] = value;
-    }
+    // Step 2: Sort colors by frequency
+    const sortedColors = Array.from(colorMap.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 32) // Limit to top 32 colors
+      .map(([_, value]) => value.color);
 
-    ctx.putImageData(imageData, 0, 0);
+    // Step 3: Create separate layers for each color
+    const layers: ImageData[] = [];
+    sortedColors.forEach((color) => {
+      const layerData = new Uint8ClampedArray(data.length);
+      for (let i = 0; i < data.length; i += 4) {
+        const isMatch =
+          Math.abs(data[i] - color[0]) < 30 &&
+          Math.abs(data[i + 1] - color[1]) < 30 &&
+          Math.abs(data[i + 2] - color[2]) < 30;
+
+        if (isMatch) {
+          layerData[i] = color[0];
+          layerData[i + 1] = color[1];
+          layerData[i + 2] = color[2];
+          layerData[i + 3] = 255; // Full opacity
+        } else {
+          layerData[i + 3] = 0; // Transparent
+        }
+      }
+      layers.push(new ImageData(layerData, width, height));
+    });
+
+    // Step 4: Stack layers from bottom to top
+    ctx.clearRect(0, 0, width, height);
+    layers.forEach((layer) => {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d")!;
+      tempCtx.putImageData(layer, 0, 0);
+
+      // Use 'source-over' blending to stack layers
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(tempCanvas, 0, 0);
+    });
+
+    // Reset composite operation
+    ctx.globalCompositeOperation = "source-over";
   };
 
   const processStrokedLayers = (
