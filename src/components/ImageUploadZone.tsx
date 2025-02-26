@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Card } from "./ui/card";
+import { InteractiveControls } from "./InteractiveControls";
 import { Button } from "./ui/button";
 import { Upload, Image as ImageIcon, Layers, BoxSelect } from "lucide-react";
 import { applyStrokeOverlay, applyContourOverlay } from "@/lib/strokeUtils";
@@ -24,6 +25,12 @@ const ImageUploadZone = ({
   const [convertedImage, setConvertedImage] = useState(initialConvertedImage);
   const [originalHdUrl, setOriginalHdUrl] = useState("");
   const [showStrokes, setShowStrokes] = useState(false);
+  const [currentTool, setCurrentTool] = useState<
+    "select" | "pan" | "colorPicker"
+  >("select");
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [showContours, setShowContours] = useState(false);
   const convertedCanvasRef = useRef<HTMLCanvasElement>(null);
   const [strokeOptions, setStrokeOptions] = useState({
@@ -158,6 +165,19 @@ const ImageUploadZone = ({
 
   return (
     <div className="w-full bg-white p-6 rounded-lg shadow-lg space-y-6">
+      <InteractiveControls
+        zoom={zoom}
+        onZoomChange={setZoom}
+        onReset={() => setZoom(1)}
+        canvas={convertedCanvasRef.current}
+        regions={[]}
+        onUndo={() => {}}
+        onRedo={() => {}}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onToolChange={setCurrentTool}
+        currentTool={currentTool}
+      />
       <ImageTypeSelector
         selectedType={imageType}
         onTypeSelect={(type) => {
