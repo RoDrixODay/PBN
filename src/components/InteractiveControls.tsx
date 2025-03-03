@@ -15,6 +15,7 @@ import {
   Hand,
   Palette,
 } from "lucide-react";
+import { usePrintFormat } from "@/lib/hooks/usePrintFormat";
 import { ExportManager } from "@/lib/paintByNumbers/features/export";
 
 interface InteractiveControlsProps {

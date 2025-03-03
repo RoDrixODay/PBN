@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Checkbox } from "./ui/checkbox";
+import { AdvancedOptions } from "./AdvancedOptions";
 
 interface ColorControlPanelProps {
   onColorCountChange?: (count: number) => void;
@@ -209,6 +210,9 @@ const ColorControlPanel = ({
               </p>
             </div>
           </div>
+
+          {/* Advanced Options for Input */}
+          <AdvancedOptions type="input" />
         </Card>
         {/* Output Options */}
         <Card className="flex-1 p-4 bg-white shadow-md">
@@ -263,6 +267,9 @@ const ColorControlPanel = ({
               </div>
             </div>
           </div>
+
+          {/* Advanced Options for Output */}
+          <AdvancedOptions type="output" />
         </Card>
       </div>
     </div>
