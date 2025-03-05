@@ -32,182 +32,280 @@ export function AdvancedOptions({ type, canvas }: AdvancedOptionsProps) {
   const [minimumArea, setMinimumArea] = useState("5px²");
   const [circleDetection, setCircleDetection] = useState("off");
 
-  // Apply quality enhancement when settings change
+  // Apply quality enhancement when settings change - disabled automatic application to prevent performance issues
   useEffect(() => {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (type === "input") {
-      // Get current image data
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-
-      // Apply enhancements based on current settings
-      if (antiAliasing !== "off") {
-        applyAntiAliasing(
-          ctx,
-          data,
-          canvas.width,
-          canvas.height,
-          antiAliasing as "smart" | "mid",
-        );
-      }
-
-      if (noiseReduction !== "off") {
-        applyNoiseReduction(
-          ctx,
-          data,
-          canvas.width,
-          canvas.height,
-          noiseReduction as "low" | "high",
-        );
-      }
-
-      if (upscaling !== "off") {
-        applyUpscaling(
-          ctx,
-          data,
-          canvas.width,
-          canvas.height,
-          upscaling as "200%" | "400%",
-        );
-      }
-    }
+    // This effect is now just tracking state changes but not automatically applying effects
+    // The actual application happens in the handler functions when buttons are clicked
   }, [antiAliasing, noiseReduction, upscaling, canvas, type]);
 
-  // Apply vectorization when settings change
+  // Apply vectorization when settings change - disabled automatic application to prevent performance issues
   useEffect(() => {
-    if (!canvas || type !== "output") return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Get current image data
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    // Apply vectorization based on current settings
-    if (roundness !== "medium") {
-      applyRoundness(
-        ctx,
-        data,
-        canvas.width,
-        canvas.height,
-        roundness as "sharp" | "round",
-      );
-    }
-
-    if (minimumArea !== "5px²") {
-      applyMinimumArea(
-        ctx,
-        data,
-        canvas.width,
-        canvas.height,
-        minimumArea as "0px²" | "90px²",
-      );
-    }
-
-    if (circleDetection !== "off") {
-      applyCircleDetection(ctx, data, canvas.width, canvas.height, "on");
-    }
+    // This effect is now just tracking state changes but not automatically applying effects
+    // The actual application happens in the handler functions when buttons are clicked
   }, [roundness, minimumArea, circleDetection, canvas, type]);
 
   // Handle quality enhancement changes
   const handleAntiAliasingChange = (level: string) => {
     setAntiAliasing(level);
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (level === "off") return;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    applyAntiAliasing(
-      ctx,
-      imageData.data,
-      canvas.width,
-      canvas.height,
-      level as "off" | "smart" | "mid",
-    );
+    try {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Create a copy of the canvas to work with
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      // Draw current canvas content to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // Get image data from temp canvas
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+
+      // Apply the effect
+      applyAntiAliasing(
+        tempCtx,
+        imageData.data,
+        tempCanvas.width,
+        tempCanvas.height,
+        level as "off" | "smart" | "mid",
+      );
+
+      // Draw the result back to the original canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
+    } catch (error) {
+      console.error("Error applying anti-aliasing:", error);
+    }
   };
 
   const handleNoiseReductionChange = (level: string) => {
     setNoiseReduction(level);
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (level === "off") return;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    applyNoiseReduction(
-      ctx,
-      imageData.data,
-      canvas.width,
-      canvas.height,
-      level as "off" | "low" | "high",
-    );
+    try {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Create a copy of the canvas to work with
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      // Draw current canvas content to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // Get image data from temp canvas
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+
+      // Apply the effect
+      applyNoiseReduction(
+        tempCtx,
+        imageData.data,
+        tempCanvas.width,
+        tempCanvas.height,
+        level as "off" | "low" | "high",
+      );
+
+      // Draw the result back to the original canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
+    } catch (error) {
+      console.error("Error applying noise reduction:", error);
+    }
   };
 
   const handleUpscalingChange = (level: string) => {
     setUpscaling(level);
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (level === "off") return;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    applyUpscaling(
-      ctx,
-      imageData.data,
-      canvas.width,
-      canvas.height,
-      level as "off" | "200%" | "400%",
-    );
+    try {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Create a copy of the canvas to work with
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      // Draw current canvas content to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // Get image data from temp canvas
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+
+      // Apply the effect
+      applyUpscaling(
+        tempCtx,
+        imageData.data,
+        tempCanvas.width,
+        tempCanvas.height,
+        level as "off" | "200%" | "400%",
+      );
+
+      // Draw the result back to the original canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
+    } catch (error) {
+      console.error("Error applying upscaling:", error);
+    }
   };
 
   // Handle vectorization changes
   const handleRoundnessChange = (level: string) => {
     setRoundness(level);
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    applyRoundness(
-      ctx,
-      imageData.data,
-      canvas.width,
-      canvas.height,
-      level as "sharp" | "medium" | "round",
-    );
+    try {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Create a copy of the canvas to work with
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      // Draw current canvas content to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // Get image data from temp canvas
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+
+      // Apply the effect
+      applyRoundness(
+        tempCtx,
+        imageData.data,
+        tempCanvas.width,
+        tempCanvas.height,
+        level as "sharp" | "medium" | "round",
+      );
+
+      // Draw the result back to the original canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
+    } catch (error) {
+      console.error("Error applying roundness:", error);
+    }
   };
 
   const handleMinimumAreaChange = (value: string) => {
     setMinimumArea(value);
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    applyMinimumArea(
-      ctx,
-      imageData.data,
-      canvas.width,
-      canvas.height,
-      value as "0px²" | "5px²" | "90px²",
-    );
+    try {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Create a copy of the canvas to work with
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      // Draw current canvas content to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // Get image data from temp canvas
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+
+      // Apply the effect
+      applyMinimumArea(
+        tempCtx,
+        imageData.data,
+        tempCanvas.width,
+        tempCanvas.height,
+        value as "0px²" | "5px²" | "90px²",
+      );
+
+      // Draw the result back to the original canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
+    } catch (error) {
+      console.error("Error applying minimum area:", error);
+    }
   };
 
   const handleCircleDetectionChange = (value: string) => {
     setCircleDetection(value);
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (value === "off") return;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    applyCircleDetection(
-      ctx,
-      imageData.data,
-      canvas.width,
-      canvas.height,
-      value as "off" | "on",
-    );
+    try {
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Create a copy of the canvas to work with
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      // Draw current canvas content to temp canvas
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // Get image data from temp canvas
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+
+      // Apply the effect
+      applyCircleDetection(
+        tempCtx,
+        imageData.data,
+        tempCanvas.width,
+        tempCanvas.height,
+        value as "off" | "on",
+      );
+
+      // Draw the result back to the original canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tempCanvas, 0, 0);
+    } catch (error) {
+      console.error("Error applying circle detection:", error);
+    }
   };
 
   return (
