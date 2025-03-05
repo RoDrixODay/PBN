@@ -201,10 +201,18 @@ export class NumberPlacer {
   private drawPlainNumber(center: Point, number: number) {
     const { fontSize, fontFamily, fontColor } = this.options;
 
-    this.ctx.font = `${fontSize}px ${fontFamily}`;
-    this.ctx.fillStyle = fontColor;
+    // Draw bold number with white outline for better visibility
+    this.ctx.font = `bold ${fontSize}px ${fontFamily}`;
+
+    // Draw text outline
+    this.ctx.strokeStyle = "white";
+    this.ctx.lineWidth = 3;
     this.ctx.textAlign = "center";
     this.ctx.textBaseline = "middle";
+    this.ctx.strokeText(number.toString(), center.x, center.y);
+
+    // Draw text fill
+    this.ctx.fillStyle = fontColor;
     this.ctx.fillText(number.toString(), center.x, center.y);
   }
 }

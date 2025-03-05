@@ -27,10 +27,11 @@ export class ContourDrawer {
         this.drawDoubleContours(regions);
         return;
       case "thick":
-        this.ctx.lineWidth = width * 2;
+        this.ctx.lineWidth = width * 3; // Make contours thicker
         break;
       default:
         this.ctx.setLineDash([]);
+        this.ctx.lineWidth = width * 2; // Default to thicker lines
     }
 
     regions.forEach((region) => this.drawRegionContour(region));

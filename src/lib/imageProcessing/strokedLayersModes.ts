@@ -344,7 +344,7 @@ export function processThinStrokeMode(
 }
 
 /**
- * Process image with Centerline mode - Vector lines along shape centers
+ * Process image with Centerline mode - Creates a paint-by-numbers style output with contours
  */
 export function processCenterlineMode(
   ctx: CanvasRenderingContext2D,
@@ -352,147 +352,224 @@ export function processCenterlineMode(
   width: number,
   height: number,
 ) {
-  // Clear canvas and set transparent background
-  ctx.clearRect(0, 0, width, height);
+  // Create a temporary canvas for the paint-by-numbers effect
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempCtx = tempCanvas.getContext("2d")!;
 
-  // Create output data with transparency
-  const outputData = new Uint8ClampedArray(data.length);
+  // Fill with white background
+  tempCtx.fillStyle = "#FFFFFF";
+  tempCtx.fillRect(0, 0, width, height);
 
-  // Parameters for centerline detection
-  const threshold = 15; // Lower threshold for more sensitive line detection
+  // Step 1: Quantize colors
+  const colorMap = new Map<string, { color: number[]; count: number }>();
+  for (let i = 0; i < data.length; i += 4) {
+    const r = Math.round(data[i] / 32) * 32;
+    const g = Math.round(data[i + 1] / 32) * 32;
+    const b = Math.round(data[i + 2] / 32) * 32;
+    const key = `${r},${g},${b}`;
 
-  // First pass: Convert to grayscale and detect edges
-  const edges = new Uint8ClampedArray(data.length / 4);
-  const edgePixels = new Set<number>();
+    if (!colorMap.has(key)) {
+      colorMap.set(key, {
+        color: [r, g, b],
+        count: 1,
+      });
+    } else {
+      colorMap.get(key)!.count++;
+    }
+  }
 
+  // Step 2: Sort colors by frequency and take top N colors
+  // Get the color count from the ColorControlPanel if available
+  let colorCount = 32; // Default
+  const colorCountElement = document.querySelector("[data-color-count]");
+  if (colorCountElement) {
+    const count = parseInt(
+      colorCountElement.getAttribute("data-color-count") || "32",
+    );
+    if (!isNaN(count)) {
+      colorCount = count;
+    }
+  }
+
+  // Make sure the color guide reflects the selected number of colors
+  colorCount = Math.min(colorCount, 32); // Cap at 32 for performance
+
+  const sortedColors = Array.from(colorMap.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, colorCount)
+    .map(([_, value]) => value.color);
+
+  // Step 3: Create regions for each color
+  const regions = new Map<string, Set<number>>();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      let minDist = Infinity;
+      let closestColor = sortedColors[0];
+
+      // Find the closest color
+      for (const color of sortedColors) {
+        const dist = Math.sqrt(
+          Math.pow(data[i] - color[0], 2) +
+            Math.pow(data[i + 1] - color[1], 2) +
+            Math.pow(data[i + 2] - color[2], 2),
+        );
+        if (dist < minDist) {
+          minDist = dist;
+          closestColor = color;
+        }
+      }
+
+      // Add pixel to region
+      const colorKey = closestColor.join(",");
+      if (!regions.has(colorKey)) {
+        regions.set(colorKey, new Set());
+      }
+      regions.get(colorKey)!.add(y * width + x);
+    }
+  }
+
+  // Step 4: Draw only the contours between regions (no fill)
+  const outlineData = new Uint8ClampedArray(width * height * 4).fill(0);
+
+  // For each pixel, check if it's on the boundary between regions
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      const idx = (y * width + x) * 4;
       const pixelIdx = y * width + x;
+      const pixelColorKey = getColorKeyForPixel(pixelIdx, regions);
 
-      // Convert to grayscale
-      const gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+      // Check if any neighboring pixel belongs to a different region
+      const hasEdge = [-1, 0, 1].some((dy) =>
+        [-1, 0, 1].some((dx) => {
+          if (dx === 0 && dy === 0) return false;
+          const neighborIdx = (y + dy) * width + (x + dx);
+          const neighborColorKey = getColorKeyForPixel(neighborIdx, regions);
+          return pixelColorKey !== neighborColorKey;
+        }),
+      );
 
-      // Calculate gradient using Sobel
-      let gx = 0;
-      let gy = 0;
-
-      // 3x3 Sobel kernels
-      for (let i = -1; i <= 1; i++) {
-        for (let j = -1; j <= 1; j++) {
-          const nIdx = ((y + i) * width + (x + j)) * 4;
-          const nGray = (data[nIdx] + data[nIdx + 1] + data[nIdx + 2]) / 3;
-
-          // Sobel weights
-          const sx = j * (i === 0 ? 2 : 1);
-          const sy = i * (j === 0 ? 2 : 1);
-
-          gx += nGray * sx;
-          gy += nGray * sy;
-        }
-      }
-
-      // Calculate gradient magnitude
-      const magnitude = Math.sqrt(gx * gx + gy * gy);
-      if (magnitude > threshold) {
-        edges[pixelIdx] = 1;
-        edgePixels.add(pixelIdx);
-      } else {
-        edges[pixelIdx] = 0;
+      if (hasEdge) {
+        // Draw black outline
+        const idx = pixelIdx * 4;
+        outlineData[idx] = 0; // Black
+        outlineData[idx + 1] = 0;
+        outlineData[idx + 2] = 0;
+        outlineData[idx + 3] = 255; // Fully opaque
       }
     }
   }
 
-  // Second pass: Find centerlines
-  const centerlinePixels = new Set<number>();
-  for (let y = 2; y < height - 2; y++) {
-    for (let x = 2; x < width - 2; x++) {
-      const pixelIdx = y * width + x;
-      const idx = pixelIdx * 4;
+  // Step 5: Add numbers to each region
+  let regionId = 1;
+  for (const [colorKey, pixels] of regions.entries()) {
+    if (pixels.size < 50) continue; // Skip very small regions
 
-      if (edges[pixelIdx]) {
-        // Check if this is a centerline pixel
-        let isCenterline = true;
+    // Find center of region
+    let sumX = 0,
+      sumY = 0;
+    pixels.forEach((pixel) => {
+      sumX += pixel % width;
+      sumY += Math.floor(pixel / width);
+    });
 
-        // Check perpendicular directions
-        for (let angle = 0; angle < Math.PI; angle += Math.PI / 4) {
-          const dx = Math.cos(angle);
-          const dy = Math.sin(angle);
+    const centerX = Math.round(sumX / pixels.size);
+    const centerY = Math.round(sumY / pixels.size);
 
-          // Check points on both sides
-          const p1 = edges[Math.round(y + dy) * width + Math.round(x + dx)];
-          const p2 = edges[Math.round(y - dy) * width + Math.round(x - dx)];
+    // Calculate font size based on region size
+    const regionArea = pixels.size;
+    const regionWidth = Math.sqrt(regionArea);
+    const fontSize = Math.max(12, Math.min(24, Math.floor(regionWidth / 4)));
 
-          if (p1 && p2) {
-            isCenterline = false;
-            break;
-          }
-        }
+    // Draw number with white outline for better visibility
+    tempCtx.font = `bold ${fontSize}px Arial`;
+    tempCtx.textAlign = "center";
+    tempCtx.textBaseline = "middle";
 
-        if (isCenterline) {
-          centerlinePixels.add(pixelIdx);
-          // Keep original color for centerline
-          outputData[idx] = data[idx];
-          outputData[idx + 1] = data[idx + 1];
-          outputData[idx + 2] = data[idx + 2];
-          outputData[idx + 3] = 255;
-        }
-      }
-    }
+    // Draw text outline
+    tempCtx.strokeStyle = "white";
+    tempCtx.lineWidth = 3;
+    tempCtx.strokeText(regionId.toString(), centerX, centerY);
+
+    // Draw text fill
+    tempCtx.fillStyle = "#000000";
+    tempCtx.fillText(regionId.toString(), centerX, centerY);
+
+    // Store the color mapping for the legend
+    const colorRgb = colorKey.split(",").map(Number);
+    const colorHex = `#${colorRgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+
+    regionId++;
   }
 
-  // Third pass: Connect broken centerlines
-  for (let y = 2; y < height - 2; y++) {
-    for (let x = 2; x < width - 2; x++) {
-      const pixelIdx = y * width + x;
-      const idx = pixelIdx * 4;
+  // Draw outlines on top
+  tempCtx.putImageData(new ImageData(outlineData, width, height), 0, 0);
 
-      // Skip if already a centerline pixel
-      if (centerlinePixels.has(pixelIdx)) continue;
+  // Add color legend at the bottom
+  const legendHeight = 80;
+  const legendPadding = 10;
+  const swatchSize = 20;
+  const swatchGap = 10;
 
-      // Check if this pixel would connect two centerline segments
-      // Look for centerline pixels that are 2-3 pixels apart
-      const directions = [
-        // Horizontal
-        [-2, 0, 2, 0],
-        [-3, 0, 3, 0],
-        // Vertical
-        [0, -2, 0, 2],
-        [0, -3, 0, 3],
-        // Diagonal
-        [-2, -2, 2, 2],
-        [-3, -3, 3, 3],
-        [-2, 2, 2, -2],
-        [-3, 3, 3, -3],
-      ];
+  // Extend canvas to accommodate legend
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = width;
+  finalCanvas.height = height + legendHeight;
+  const finalCtx = finalCanvas.getContext("2d")!;
 
-      for (const [dx1, dy1, dx2, dy2] of directions) {
-        const p1 = (y + dy1) * width + (x + dx1);
-        const p2 = (y + dy2) * width + (x + dx2);
+  // Fill with white background
+  finalCtx.fillStyle = "#FFFFFF";
+  finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-        // Check if both points are valid centerline pixels
-        if (centerlinePixels.has(p1) && centerlinePixels.has(p2)) {
-          // Connect the gap
-          const idx1 = p1 * 4;
-          const idx2 = p2 * 4;
+  // Draw the paint-by-numbers image
+  finalCtx.drawImage(tempCanvas, 0, 0);
 
-          // Use average color of the two centerline pixels
-          outputData[idx] = Math.round((data[idx1] + data[idx2]) / 2);
-          outputData[idx + 1] = Math.round(
-            (data[idx1 + 1] + data[idx2 + 1]) / 2,
-          );
-          outputData[idx + 2] = Math.round(
-            (data[idx1 + 2] + data[idx2 + 2]) / 2,
-          );
-          outputData[idx + 3] = 255;
-          break;
-        }
-      }
+  // Draw legend title
+  finalCtx.font = "bold 14px Arial";
+  finalCtx.fillStyle = "#000000";
+  finalCtx.textAlign = "left";
+  finalCtx.fillText("Color Guide:", legendPadding, height + 20);
+
+  // Draw color swatches with numbers
+  let xPos = legendPadding;
+  let yPos = height + 40;
+  let count = 0;
+
+  for (const [colorKey, pixels] of regions.entries()) {
+    if (pixels.size < 50) continue; // Skip very small regions
+    count++;
+
+    // Check if we need to wrap to next row
+    if (xPos + swatchSize + 40 > width) {
+      xPos = legendPadding;
+      yPos += swatchSize + swatchGap;
     }
+
+    // Draw color swatch
+    const colorRgb = colorKey.split(",").map(Number);
+    finalCtx.fillStyle = `rgb(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]})`;
+    finalCtx.fillRect(xPos, yPos, swatchSize, swatchSize);
+
+    // Draw swatch outline
+    finalCtx.strokeStyle = "#000000";
+    finalCtx.lineWidth = 1;
+    finalCtx.strokeRect(xPos, yPos, swatchSize, swatchSize);
+
+    // Draw number
+    finalCtx.font = "12px Arial";
+    finalCtx.fillStyle = "#000000";
+    finalCtx.textAlign = "left";
+    finalCtx.fillText(count.toString(), xPos + swatchSize + 5, yPos + 15);
+
+    xPos += swatchSize + 40;
   }
 
-  // Apply the result
-  ctx.putImageData(new ImageData(outputData, width, height), 0, 0);
+  // Copy result to original context
+  ctx.clearRect(0, 0, width, height);
+  ctx.canvas.width = finalCanvas.width;
+  ctx.canvas.height = finalCanvas.height;
+  ctx.drawImage(finalCanvas, 0, 0);
 }
 
 /**
@@ -694,4 +771,262 @@ export function processCartoonOutlineMode(
 
   // Apply the result
   ctx.putImageData(new ImageData(outputData, width, height), 0, 0);
+}
+
+/**
+ * Process image with Single mode - Creates a paint-by-numbers style output
+ * with white background, black outlines, and numbered regions
+ */
+export function processSingleMode(
+  ctx: CanvasRenderingContext2D,
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+) {
+  // Create a temporary canvas for the paint-by-numbers effect
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempCtx = tempCanvas.getContext("2d")!;
+
+  // Fill with white background
+  tempCtx.fillStyle = "#FFFFFF";
+  tempCtx.fillRect(0, 0, width, height);
+
+  // Step 1: Quantize colors
+  const colorMap = new Map<string, { color: number[]; count: number }>();
+  for (let i = 0; i < data.length; i += 4) {
+    const r = Math.round(data[i] / 32) * 32;
+    const g = Math.round(data[i + 1] / 32) * 32;
+    const b = Math.round(data[i + 2] / 32) * 32;
+    const key = `${r},${g},${b}`;
+
+    if (!colorMap.has(key)) {
+      colorMap.set(key, {
+        color: [r, g, b],
+        count: 1,
+      });
+    } else {
+      colorMap.get(key)!.count++;
+    }
+  }
+
+  // Step 2: Sort colors by frequency and take top N colors
+  // Get the color count from the ColorControlPanel if available
+  let colorCount = 32; // Default
+  const colorCountElement = document.querySelector("[data-color-count]");
+  if (colorCountElement) {
+    const count = parseInt(
+      colorCountElement.getAttribute("data-color-count") || "32",
+    );
+    if (!isNaN(count)) {
+      colorCount = count;
+    }
+  }
+
+  // Make sure the color guide reflects the selected number of colors
+  colorCount = Math.min(colorCount, 32); // Cap at 32 for performance
+
+  const sortedColors = Array.from(colorMap.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, colorCount)
+    .map(([_, value]) => value.color);
+
+  // Step 3: Create regions for each color
+  const regions = new Map<string, Set<number>>();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      let minDist = Infinity;
+      let closestColor = sortedColors[0];
+
+      // Find the closest color
+      for (const color of sortedColors) {
+        const dist = Math.sqrt(
+          Math.pow(data[i] - color[0], 2) +
+            Math.pow(data[i + 1] - color[1], 2) +
+            Math.pow(data[i + 2] - color[2], 2),
+        );
+        if (dist < minDist) {
+          minDist = dist;
+          closestColor = color;
+        }
+      }
+
+      // Add pixel to region
+      const colorKey = closestColor.join(",");
+      if (!regions.has(colorKey)) {
+        regions.set(colorKey, new Set());
+      }
+      regions.get(colorKey)!.add(y * width + x);
+    }
+  }
+
+  // Step 4: Draw black outlines between regions with consistent thickness
+  const outlineData = new Uint8ClampedArray(width * height * 4).fill(0);
+
+  // Set a fixed outline thickness of 0.5 for all outlines
+  const outlineThickness = 0.5;
+
+  // Use a fixed pixel thickness for all outlines to ensure consistency
+  const pixelThickness = 1; // Always use 1 pixel for consistent thin lines
+
+  // First pass: Identify all edge pixels
+  const edgePixels = new Set<number>();
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const pixelIdx = y * width + x;
+      const pixelColorKey = getColorKeyForPixel(pixelIdx, regions);
+
+      // Check if any neighboring pixel belongs to a different region
+      const hasEdge = [-1, 0, 1].some((dy) =>
+        [-1, 0, 1].some((dx) => {
+          if (dx === 0 && dy === 0) return false;
+          const neighborIdx = (y + dy) * width + (x + dx);
+          const neighborColorKey = getColorKeyForPixel(neighborIdx, regions);
+          return pixelColorKey !== neighborColorKey;
+        }),
+      );
+
+      if (hasEdge) {
+        edgePixels.add(pixelIdx);
+      }
+    }
+  }
+
+  // Second pass: Draw all edges with exactly the same thickness
+  for (const pixelIdx of edgePixels) {
+    const y = Math.floor(pixelIdx / width);
+    const x = pixelIdx % width;
+    const idx = pixelIdx * 4;
+
+    // Draw the edge pixel itself
+    outlineData[idx] = 0; // Black
+    outlineData[idx + 1] = 0;
+    outlineData[idx + 2] = 0;
+    outlineData[idx + 3] = 255; // Fully opaque
+  }
+
+  // Step 5: Add numbers to each region
+  let regionId = 1;
+  for (const [colorKey, pixels] of regions.entries()) {
+    if (pixels.size < 50) continue; // Skip very small regions
+
+    // Find center of region
+    let sumX = 0,
+      sumY = 0;
+    pixels.forEach((pixel) => {
+      sumX += pixel % width;
+      sumY += Math.floor(pixel / width);
+    });
+
+    const centerX = Math.round(sumX / pixels.size);
+    const centerY = Math.round(sumY / pixels.size);
+
+    // Calculate font size based on region size
+    const regionArea = pixels.size;
+    const regionWidth = Math.sqrt(regionArea);
+    const fontSize = Math.max(12, Math.min(24, Math.floor(regionWidth / 4)));
+
+    // Draw number with white outline for better visibility
+    tempCtx.font = `bold ${fontSize}px Arial`;
+    tempCtx.textAlign = "center";
+    tempCtx.textBaseline = "middle";
+
+    // Draw text outline
+    tempCtx.strokeStyle = "white";
+    tempCtx.lineWidth = 3;
+    tempCtx.strokeText(regionId.toString(), centerX, centerY);
+
+    // Draw text fill
+    tempCtx.fillStyle = "#000000";
+    tempCtx.fillText(regionId.toString(), centerX, centerY);
+
+    // Store the color mapping for the legend
+    const colorRgb = colorKey.split(",").map(Number);
+    const colorHex = `#${colorRgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+
+    regionId++;
+  }
+
+  // Draw outlines on top
+  tempCtx.putImageData(new ImageData(outlineData, width, height), 0, 0);
+
+  // Add color legend at the bottom
+  const legendHeight = 80;
+  const legendPadding = 10;
+  const swatchSize = 20;
+  const swatchGap = 10;
+
+  // Extend canvas to accommodate legend
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = width;
+  finalCanvas.height = height + legendHeight;
+  const finalCtx = finalCanvas.getContext("2d")!;
+
+  // Fill with white background
+  finalCtx.fillStyle = "#FFFFFF";
+  finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+  // Draw the paint-by-numbers image
+  finalCtx.drawImage(tempCanvas, 0, 0);
+
+  // Draw legend title
+  finalCtx.font = "bold 14px Arial";
+  finalCtx.fillStyle = "#000000";
+  finalCtx.textAlign = "left";
+  finalCtx.fillText("Color Guide:", legendPadding, height + 20);
+
+  // Draw color swatches with numbers
+  let xPos = legendPadding;
+  let yPos = height + 40;
+  let count = 0;
+
+  for (const [colorKey, pixels] of regions.entries()) {
+    if (pixels.size < 50) continue; // Skip very small regions
+    count++;
+
+    // Check if we need to wrap to next row
+    if (xPos + swatchSize + 40 > width) {
+      xPos = legendPadding;
+      yPos += swatchSize + swatchGap;
+    }
+
+    // Draw color swatch
+    const colorRgb = colorKey.split(",").map(Number);
+    finalCtx.fillStyle = `rgb(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]})`;
+    finalCtx.fillRect(xPos, yPos, swatchSize, swatchSize);
+
+    // Draw swatch outline
+    finalCtx.strokeStyle = "#000000";
+    finalCtx.lineWidth = 1;
+    finalCtx.strokeRect(xPos, yPos, swatchSize, swatchSize);
+
+    // Draw number
+    finalCtx.font = "12px Arial";
+    finalCtx.fillStyle = "#000000";
+    finalCtx.textAlign = "left";
+    finalCtx.fillText(count.toString(), xPos + swatchSize + 5, yPos + 15);
+
+    xPos += swatchSize + 40;
+  }
+
+  // Copy result to original context
+  ctx.clearRect(0, 0, width, height);
+  ctx.canvas.width = finalCanvas.width;
+  ctx.canvas.height = finalCanvas.height;
+  ctx.drawImage(finalCanvas, 0, 0);
+}
+
+// Helper function to find which region a pixel belongs to
+function getColorKeyForPixel(
+  pixelIdx: number,
+  regions: Map<string, Set<number>>,
+): string | null {
+  for (const [colorKey, pixels] of regions.entries()) {
+    if (pixels.has(pixelIdx)) {
+      return colorKey;
+    }
+  }
+  return null;
 }

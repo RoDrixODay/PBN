@@ -52,6 +52,10 @@ export const processPaintByNumbers = (
   tempCanvas.height = height;
   const tempCtx = tempCanvas.getContext("2d")!;
 
+  // Fill background with white
+  tempCtx.fillStyle = "#FFFFFF";
+  tempCtx.fillRect(0, 0, width, height);
+
   // Draw regions with colors
   sortedRegions.forEach((region, index) => {
     const regionCanvas = document.createElement("canvas");
@@ -59,13 +63,17 @@ export const processPaintByNumbers = (
     regionCanvas.height = height;
     const regionCtx = regionCanvas.getContext("2d")!;
 
-    // Fill region
-    const regionData = new Uint8ClampedArray(data.length);
+    // Fill region with white background
+    regionCtx.fillStyle = "#FFFFFF";
+    regionCtx.fillRect(0, 0, width, height);
+
+    // Draw region outline
+    const regionData = new Uint8ClampedArray(data.length).fill(0);
     region.pixels.forEach((pixel) => {
       const i = pixel * 4;
-      regionData[i] = region.color[0];
-      regionData[i + 1] = region.color[1];
-      regionData[i + 2] = region.color[2];
+      regionData[i] = 255; // White fill
+      regionData[i + 1] = 255;
+      regionData[i + 2] = 255;
       regionData[i + 3] = 255;
     });
     regionCtx.putImageData(new ImageData(regionData, width, height), 0, 0);
@@ -76,7 +84,8 @@ export const processPaintByNumbers = (
     const centerX = centerPixel % width;
     const centerY = Math.floor(centerPixel / width);
 
-    regionCtx.font = "12px Arial";
+    // Draw bold number
+    regionCtx.font = "bold 16px Arial";
     regionCtx.fillStyle = "#000000";
     regionCtx.textAlign = "center";
     regionCtx.textBaseline = "middle";
@@ -88,7 +97,7 @@ export const processPaintByNumbers = (
     if (onProgress) onProgress(50 + (index / sortedRegions.length) * 50);
   });
 
-  // Add contours
+  // Add contours - thick black lines
   const contourData = new Uint8ClampedArray(data.length);
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
@@ -110,8 +119,21 @@ export const processPaintByNumbers = (
       );
 
       if (hasEdge) {
+        // Draw thick black contour
         contourData[i] = contourData[i + 1] = contourData[i + 2] = 0;
         contourData[i + 3] = 255;
+
+        // Make contour thicker by adding to adjacent pixels
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const ni = ((y + dy) * width + (x + dx)) * 4;
+            if (ni >= 0 && ni < contourData.length - 3) {
+              contourData[ni] = contourData[ni + 1] = contourData[ni + 2] = 0;
+              contourData[ni + 3] = 255;
+            }
+          }
+        }
       }
     }
   }

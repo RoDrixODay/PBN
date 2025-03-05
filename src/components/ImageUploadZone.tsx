@@ -2,8 +2,26 @@ import React, { useState, useRef } from "react";
 import { Card } from "./ui/card";
 import { InteractiveControls } from "./InteractiveControls";
 import { Button } from "./ui/button";
-import { Upload, Image as ImageIcon, Layers, BoxSelect } from "lucide-react";
+import {
+  Upload,
+  Image as ImageIcon,
+  Layers,
+  BoxSelect,
+  Download,
+} from "lucide-react";
 import { applyStrokeOverlay, applyContourOverlay } from "@/lib/strokeUtils";
+import {
+  processHeavyStrokeMode,
+  processMediumStrokeMode,
+  processThinStrokeMode,
+  processCenterlineMode,
+  processSingleMode,
+} from "@/lib/imageProcessing/strokedLayersModes";
+import {
+  applyAntiAliasing,
+  applyNoiseReduction,
+  applyUpscaling,
+} from "@/lib/imageProcessing/qualityEnhancement";
 import ImageTypeSelector, { ImageType } from "./ImageTypeSelector";
 import {
   processImage,
@@ -24,20 +42,19 @@ const ImageUploadZone = ({
 }: ImageUploadZoneProps) => {
   const [convertedImage, setConvertedImage] = useState(initialConvertedImage);
   const [originalHdUrl, setOriginalHdUrl] = useState("");
-  const [showStrokes, setShowStrokes] = useState(false);
   const [currentTool, setCurrentTool] = useState<
     "select" | "pan" | "colorPicker"
   >("select");
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [showStrokes, setShowStrokes] = useState(false);
   const [showContours, setShowContours] = useState(false);
+  const [currentStrokeMode, setCurrentStrokeMode] = useState<
+    "heavy" | "medium" | "thin" | "centerline" | "single" | null
+  >(null);
   const convertedCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [strokeOptions, setStrokeOptions] = useState({
-    strokeColor: "#000000",
-    strokeWidth: 2,
-    smoothing: 1,
-  });
+
   const [isDragging, setIsDragging] = useState(false);
   const [imageType, setImageType] = useState<ImageType>("photo");
   const [detailLevel, setDetailLevel] = useState(3);
@@ -60,6 +77,93 @@ const ImageUploadZone = ({
       processAndUploadImage(files[0]);
     }
   };
+
+  // Function to apply stroke mode
+  const applyStrokeMode = (
+    mode: "heavy" | "medium" | "thin" | "centerline" | "single",
+  ) => {
+    // Get the current outline thickness from the control panel
+    let outlineThickness = 3; // Default
+    const thicknessSlider = document.querySelector("[data-outline-thickness]");
+    if (thicknessSlider) {
+      const thickness = parseFloat(
+        thicknessSlider.getAttribute("data-outline-thickness") || "3",
+      );
+      if (!isNaN(thickness)) {
+        outlineThickness = thickness;
+      }
+    }
+    if (!convertedCanvasRef.current || !convertedImage) return;
+
+    const ctx = convertedCanvasRef.current.getContext("2d");
+    if (!ctx) return;
+
+    // Save the current mode
+    setCurrentStrokeMode(mode);
+
+    // Create a new image to load the original converted image
+    const img = new Image();
+    img.onload = () => {
+      // Reset canvas and draw original image
+      convertedCanvasRef.current!.width = img.width;
+      convertedCanvasRef.current!.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      // Get image data for processing
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        convertedCanvasRef.current!.width,
+        convertedCanvasRef.current!.height,
+      );
+      const data = imageData.data;
+      const width = convertedCanvasRef.current!.width;
+      const height = convertedCanvasRef.current!.height;
+
+      // Apply the selected mode
+      switch (mode) {
+        case "heavy":
+          processHeavyStrokeMode(ctx, data, width, height);
+          break;
+        case "medium":
+          processMediumStrokeMode(ctx, data, width, height);
+          break;
+        case "thin":
+          processThinStrokeMode(ctx, data, width, height);
+          break;
+        case "centerline":
+          processCenterlineMode(ctx, data, width, height);
+          break;
+        case "single":
+          processSingleMode(ctx, data, width, height);
+          break;
+      }
+    };
+    img.src = convertedImage;
+  };
+
+  // Listen for custom events from ImageTypeSelector
+  React.useEffect(() => {
+    const handleApplyStrokeMode = (event: any) => {
+      if (event.detail && event.detail.mode) {
+        applyStrokeMode(event.detail.mode);
+      }
+    };
+
+    // Add event listener to this component
+    const component = document.querySelector(
+      '[data-component="ImageUploadZone"]',
+    );
+    if (component) {
+      component.addEventListener("applyStrokeMode", handleApplyStrokeMode);
+    }
+
+    return () => {
+      if (component) {
+        component.removeEventListener("applyStrokeMode", handleApplyStrokeMode);
+      }
+    };
+  }, [convertedImage]);
 
   const processAndUploadImage = async (file: File) => {
     try {
@@ -136,6 +240,51 @@ const ImageUploadZone = ({
         colorCount: 8, // This could be made configurable
       });
 
+      // Apply quality enhancements if needed
+      const enhancedImg = new Image();
+      enhancedImg.onload = () => {
+        const enhancementCanvas = document.createElement("canvas");
+        enhancementCanvas.width = enhancedImg.width;
+        enhancementCanvas.height = enhancedImg.height;
+        const enhancementCtx = enhancementCanvas.getContext("2d");
+
+        if (enhancementCtx) {
+          // Draw the processed image
+          enhancementCtx.drawImage(enhancedImg, 0, 0);
+
+          // Get image data for enhancements
+          const imageData = enhancementCtx.getImageData(
+            0,
+            0,
+            enhancementCanvas.width,
+            enhancementCanvas.height,
+          );
+
+          // Apply smart anti-aliasing by default
+          applyAntiAliasing(
+            enhancementCtx,
+            imageData.data,
+            enhancementCanvas.width,
+            enhancementCanvas.height,
+            "smart",
+          );
+
+          // Apply high noise reduction for cleaner results
+          applyNoiseReduction(
+            enhancementCtx,
+            imageData.data,
+            enhancementCanvas.width,
+            enhancementCanvas.height,
+            "high",
+          );
+
+          // Update the processed image URL with enhanced version
+          setConvertedImage(enhancementCanvas.toDataURL());
+        }
+      };
+      enhancedImg.src = processedImageUrl;
+
+      // Initial setting before enhancements
       setConvertedImage(processedImageUrl);
 
       // Initialize the canvas with the processed image
@@ -163,8 +312,23 @@ const ImageUploadZone = ({
     }
   };
 
+  const handleDownloadImage = () => {
+    if (!convertedCanvasRef.current) return;
+
+    // Create a download link
+    const link = document.createElement("a");
+    link.download = "paint-by-numbers.png";
+    link.href = convertedCanvasRef.current.toDataURL("image/png");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="w-full bg-white p-6 rounded-lg shadow-lg space-y-6">
+    <div
+      className="w-full bg-white p-6 rounded-lg shadow-lg space-y-6"
+      data-component="ImageUploadZone"
+    >
       <InteractiveControls
         zoom={zoom}
         onZoomChange={setZoom}
@@ -251,83 +415,27 @@ const ImageUploadZone = ({
         <Card className="flex-1 p-4 relative">
           <div className="absolute top-4 right-4 z-10 flex gap-2">
             <Button
-              variant="outline"
+              variant="primary"
               size="sm"
-              className={
-                showContours ? "bg-primary text-primary-foreground" : ""
-              }
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => {
-                setShowContours(!showContours);
+                // Apply Paint by Numbers processing
                 if (convertedCanvasRef.current && convertedImage) {
-                  const ctx = convertedCanvasRef.current.getContext("2d");
-                  if (ctx) {
-                    if (!showContours) {
-                      // Apply contours
-                      const img = new Image();
-                      img.onload = () => {
-                        convertedCanvasRef.current!.width = img.width;
-                        convertedCanvasRef.current!.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                        applyContourOverlay(convertedCanvasRef.current!);
-                      };
-                      img.src = convertedImage;
-                    } else {
-                      // Remove contours (restore original)
-                      const img = new Image();
-                      img.onload = () => {
-                        convertedCanvasRef.current!.width = img.width;
-                        convertedCanvasRef.current!.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                      };
-                      img.src = convertedImage;
-                    }
-                  }
+                  applyStrokeMode("single");
                 }
               }}
             >
               <BoxSelect className="w-4 h-4 mr-1" />
-              {showContours ? "Hide Contours" : "Show Contours"}
+              Paint by Numbers
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className={
-                showStrokes ? "bg-primary text-primary-foreground" : ""
-              }
-              onClick={() => {
-                setShowStrokes(!showStrokes);
-                if (convertedCanvasRef.current && convertedImage) {
-                  const ctx = convertedCanvasRef.current.getContext("2d");
-                  if (ctx) {
-                    if (!showStrokes) {
-                      // Apply strokes
-                      const img = new Image();
-                      img.onload = () => {
-                        convertedCanvasRef.current!.width = img.width;
-                        convertedCanvasRef.current!.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                        applyStrokeOverlay(
-                          convertedCanvasRef.current!,
-                          strokeOptions,
-                        );
-                      };
-                      img.src = convertedImage;
-                    } else {
-                      // Remove strokes (restore original)
-                      const img = new Image();
-                      img.onload = () => {
-                        convertedCanvasRef.current!.width = img.width;
-                        convertedCanvasRef.current!.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-                      };
-                      img.src = convertedImage;
-                    }
-                  }
-                }
-              }}
+              onClick={handleDownloadImage}
+              disabled={!convertedImage}
             >
-              <Layers className="w-4 h-4 mr-1" />
-              {showStrokes ? "Hide Strokes" : "Show Strokes"}
+              <Download className="w-4 h-4 mr-1" />
+              Download
             </Button>
           </div>
           {convertedImage ? (

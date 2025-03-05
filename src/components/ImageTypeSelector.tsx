@@ -336,65 +336,87 @@ const ImageTypeSelector = ({
                             // Select stroked type first
                             onTypeSelect("stroked");
 
-                            // Apply the selected processing mode
+                            // Store the selected mode and apply it
                             const canvas = document.querySelector("canvas");
                             if (!canvas) return;
 
-                            const ctx = canvas.getContext("2d");
-                            if (!ctx) return;
-
-                            const img = new Image();
-                            img.onload = () => {
-                              ctx.clearRect(0, 0, canvas.width, canvas.height);
-                              ctx.drawImage(img, 0, 0);
-
-                              const imageData = ctx.getImageData(
-                                0,
-                                0,
-                                canvas.width,
-                                canvas.height,
+                            // Get the parent component's applyStrokeMode function
+                            const imageUploadZone = document.querySelector(
+                              '[data-component="ImageUploadZone"]',
+                            );
+                            if (imageUploadZone) {
+                              const applyStrokeModeEvent = new CustomEvent(
+                                "applyStrokeMode",
+                                {
+                                  detail: { mode },
+                                },
                               );
-                              const data = imageData.data;
-                              const width = canvas.width;
-                              const height = canvas.height;
+                              imageUploadZone.dispatchEvent(
+                                applyStrokeModeEvent,
+                              );
+                            } else {
+                              // Fallback if custom event doesn't work
+                              const ctx = canvas.getContext("2d");
+                              if (!ctx) return;
 
-                              // Process based on selected mode
-                              switch (mode) {
-                                case "heavy":
-                                  processHeavyStrokeMode(
-                                    ctx,
-                                    data,
-                                    width,
-                                    height,
-                                  );
-                                  break;
-                                case "medium":
-                                  processMediumStrokeMode(
-                                    ctx,
-                                    data,
-                                    width,
-                                    height,
-                                  );
-                                  break;
-                                case "thin":
-                                  processThinStrokeMode(
-                                    ctx,
-                                    data,
-                                    width,
-                                    height,
-                                  );
-                                  break;
-                                case "centerline":
-                                  processCenterlineMode(
-                                    ctx,
-                                    data,
-                                    width,
-                                    height,
-                                  );
-                                  break;
-                              }
-                            };
-                            img.src = canvas.toDataURL();
+                              const img = new Image();
+                              img.onload = () => {
+                                ctx.clearRect(
+                                  0,
+                                  0,
+                                  canvas.width,
+                                  canvas.height,
+                                );
+                                ctx.drawImage(img, 0, 0);
+
+                                const imageData = ctx.getImageData(
+                                  0,
+                                  0,
+                                  canvas.width,
+                                  canvas.height,
+                                );
+                                const data = imageData.data;
+                                const width = canvas.width;
+                                const height = canvas.height;
+
+                                // Process based on selected mode
+                                switch (mode) {
+                                  case "heavy":
+                                    processHeavyStrokeMode(
+                                      ctx,
+                                      data,
+                                      width,
+                                      height,
+                                    );
+                                    break;
+                                  case "medium":
+                                    processMediumStrokeMode(
+                                      ctx,
+                                      data,
+                                      width,
+                                      height,
+                                    );
+                                    break;
+                                  case "thin":
+                                    processThinStrokeMode(
+                                      ctx,
+                                      data,
+                                      width,
+                                      height,
+                                    );
+                                    break;
+                                  case "centerline":
+                                    processCenterlineMode(
+                                      ctx,
+                                      data,
+                                      width,
+                                      height,
+                                    );
+                                    break;
+                                }
+                              };
+                              img.src = canvas.toDataURL();
+                            }
                           }}
                           selectedMode="medium"
                         />

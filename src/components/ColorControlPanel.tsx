@@ -23,7 +23,7 @@ interface ColorControlPanelProps {
   onColorChange?: (index: number, color: string) => void;
 }
 
-const colorOptions = [1, 2, 4, 6, 8, 12, 16, 24, 28, 32, 36, 50, 99];
+const colorOptions = [1, 2, 4, 6, 8, 12, 16, 24, 32, 36, 50, 99];
 
 const generateColorPalette = (count: number) => {
   return Array.from({ length: count }, (_, i) => {
@@ -47,12 +47,19 @@ const ColorControlPanel = ({
   originalImage,
   onColorChange = () => {},
 }: ColorControlPanelProps) => {
+  // Add a data attribute to store the current color count for other components to access
+  React.useEffect(() => {
+    const element = document.querySelector(".color-control-panel");
+    if (element) {
+      element.setAttribute("data-color-count", colorCount.toString());
+    }
+  }, [colorCount]);
   const [dominantColors, setDominantColors] = React.useState<string[]>([]);
   const [outputColors, setOutputColors] = React.useState<string[]>([]);
   const [contourDetection, setContourDetection] = useState(false);
-  const [outlineThickness, setOutlineThickness] = useState(2);
+  const [outlineThickness, setOutlineThickness] = useState(3);
   const [showNumbers, setShowNumbers] = useState(true);
-  const [fontSize, setFontSize] = useState(12);
+  const [fontSize, setFontSize] = useState(16);
 
   // Extract dominant colors from the image
   React.useEffect(() => {
@@ -82,6 +89,25 @@ const ColorControlPanel = ({
       const newColors = dominantColors.slice(0, colorCount);
       setOutputColors(newColors);
       newColors.forEach((color, index) => onColorChange(index, color));
+
+      // Update the data attribute for the paint-by-numbers processor
+      const element = document.querySelector(".color-control-panel");
+      if (element) {
+        element.setAttribute("data-color-count", colorCount.toString());
+      }
+
+      // If we have a canvas with a paint-by-numbers image, update it
+      const canvas = document.querySelector("canvas");
+      const imageUploadZone = document.querySelector(
+        '[data-component="ImageUploadZone"]',
+      );
+      if (canvas && imageUploadZone) {
+        // Trigger the paint-by-numbers processing with the new color count
+        const applyStrokeModeEvent = new CustomEvent("applyStrokeMode", {
+          detail: { mode: "single" },
+        });
+        imageUploadZone.dispatchEvent(applyStrokeModeEvent);
+      }
     }
   }, [colorCount, dominantColors]);
 
@@ -114,7 +140,10 @@ const ColorControlPanel = ({
       .map(([color]) => color);
   };
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4 color-control-panel"
+      data-color-count={colorCount}
+    >
       <ControlPanel
         outlineThickness={outlineThickness}
         showNumbers={showNumbers}
@@ -155,10 +184,12 @@ const ColorControlPanel = ({
             <RadioGroup
               value={colorCount.toString()}
               onValueChange={(value) => onColorCountChange(parseInt(value))}
-              className="space-y-1"
             >
               {colorOptions.map((option) => (
-                <div key={option} className="flex items-start gap-2">
+                <div
+                  key={option}
+                  className="flex gap-[5px] items-start justify-start"
+                >
                   <RadioGroupItem
                     value={option.toString()}
                     id={`color-${option}`}
@@ -170,11 +201,11 @@ const ColorControlPanel = ({
                     >
                       {option}:
                     </Label>
-                    <div className="flex flex-wrap gap-0 mt-1">
+                    <div className="flex flex-wrap mt-1">
                       {dominantColors.slice(0, option).map((color, index) => (
                         <div
                           key={index}
-                          className="w-4 h-4"
+                          className="w-4 h-4 inline-block"
                           style={{ backgroundColor: color }}
                         />
                       ))}
@@ -183,6 +214,25 @@ const ColorControlPanel = ({
                 </div>
               ))}
             </RadioGroup>
+          </div>
+          <div className="mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onColorCountChange(Math.min(colorCount + 4, 99))}
+              className="text-xs mr-2"
+            >
+              More Colors
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onColorCountChange(Math.max(colorCount - 4, 1))}
+              className="text-xs"
+              disabled={colorCount <= 4}
+            >
+              Fewer Colors
+            </Button>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -212,7 +262,10 @@ const ColorControlPanel = ({
           </div>
 
           {/* Advanced Options for Input */}
-          <AdvancedOptions type="input" />
+          <AdvancedOptions
+            type="input"
+            canvas={document.querySelector("canvas")}
+          />
         </Card>
         {/* Output Options */}
         <Card className="flex-1 p-4 bg-white shadow-md">
@@ -269,7 +322,10 @@ const ColorControlPanel = ({
           </div>
 
           {/* Advanced Options for Output */}
-          <AdvancedOptions type="output" />
+          <AdvancedOptions
+            type="output"
+            canvas={document.querySelector("canvas")}
+          />
         </Card>
       </div>
     </div>

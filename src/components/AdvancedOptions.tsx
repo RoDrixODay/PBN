@@ -1,16 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
+import {
+  applyAntiAliasing,
+  applyNoiseReduction,
+  applyUpscaling,
+} from "@/lib/imageProcessing/qualityEnhancement";
+import {
+  applyRoundness,
+  applyMinimumArea,
+  applyCircleDetection,
+} from "@/lib/imageProcessing/vectorization";
 
 interface AdvancedOptionsProps {
   type: "input" | "output";
+  canvas?: HTMLCanvasElement | null;
 }
 
-export function AdvancedOptions({ type }: AdvancedOptionsProps) {
+export function AdvancedOptions({ type, canvas }: AdvancedOptionsProps) {
   // Quality Enhancement states
   const [antiAliasing, setAntiAliasing] = useState("off");
   const [noiseReduction, setNoiseReduction] = useState("high");
@@ -20,6 +31,184 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
   const [roundness, setRoundness] = useState("medium");
   const [minimumArea, setMinimumArea] = useState("5px²");
   const [circleDetection, setCircleDetection] = useState("off");
+
+  // Apply quality enhancement when settings change
+  useEffect(() => {
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    if (type === "input") {
+      // Get current image data
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Apply enhancements based on current settings
+      if (antiAliasing !== "off") {
+        applyAntiAliasing(
+          ctx,
+          data,
+          canvas.width,
+          canvas.height,
+          antiAliasing as "smart" | "mid",
+        );
+      }
+
+      if (noiseReduction !== "off") {
+        applyNoiseReduction(
+          ctx,
+          data,
+          canvas.width,
+          canvas.height,
+          noiseReduction as "low" | "high",
+        );
+      }
+
+      if (upscaling !== "off") {
+        applyUpscaling(
+          ctx,
+          data,
+          canvas.width,
+          canvas.height,
+          upscaling as "200%" | "400%",
+        );
+      }
+    }
+  }, [antiAliasing, noiseReduction, upscaling, canvas, type]);
+
+  // Apply vectorization when settings change
+  useEffect(() => {
+    if (!canvas || type !== "output") return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Get current image data
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // Apply vectorization based on current settings
+    if (roundness !== "medium") {
+      applyRoundness(
+        ctx,
+        data,
+        canvas.width,
+        canvas.height,
+        roundness as "sharp" | "round",
+      );
+    }
+
+    if (minimumArea !== "5px²") {
+      applyMinimumArea(
+        ctx,
+        data,
+        canvas.width,
+        canvas.height,
+        minimumArea as "0px²" | "90px²",
+      );
+    }
+
+    if (circleDetection !== "off") {
+      applyCircleDetection(ctx, data, canvas.width, canvas.height, "on");
+    }
+  }, [roundness, minimumArea, circleDetection, canvas, type]);
+
+  // Handle quality enhancement changes
+  const handleAntiAliasingChange = (level: string) => {
+    setAntiAliasing(level);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyAntiAliasing(
+      ctx,
+      imageData.data,
+      canvas.width,
+      canvas.height,
+      level as "off" | "smart" | "mid",
+    );
+  };
+
+  const handleNoiseReductionChange = (level: string) => {
+    setNoiseReduction(level);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyNoiseReduction(
+      ctx,
+      imageData.data,
+      canvas.width,
+      canvas.height,
+      level as "off" | "low" | "high",
+    );
+  };
+
+  const handleUpscalingChange = (level: string) => {
+    setUpscaling(level);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyUpscaling(
+      ctx,
+      imageData.data,
+      canvas.width,
+      canvas.height,
+      level as "off" | "200%" | "400%",
+    );
+  };
+
+  // Handle vectorization changes
+  const handleRoundnessChange = (level: string) => {
+    setRoundness(level);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyRoundness(
+      ctx,
+      imageData.data,
+      canvas.width,
+      canvas.height,
+      level as "sharp" | "medium" | "round",
+    );
+  };
+
+  const handleMinimumAreaChange = (value: string) => {
+    setMinimumArea(value);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyMinimumArea(
+      ctx,
+      imageData.data,
+      canvas.width,
+      canvas.height,
+      value as "0px²" | "5px²" | "90px²",
+    );
+  };
+
+  const handleCircleDetectionChange = (value: string) => {
+    setCircleDetection(value);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyCircleDetection(
+      ctx,
+      imageData.data,
+      canvas.width,
+      canvas.height,
+      value as "off" | "on",
+    );
+  };
 
   return (
     <div className="mt-6">
@@ -58,7 +247,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={antiAliasing === "off" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-r-none"
-                      onClick={() => setAntiAliasing("off")}
+                      onClick={() => handleAntiAliasingChange("off")}
                     >
                       Off
                     </Button>
@@ -66,7 +255,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={antiAliasing === "smart" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-none"
-                      onClick={() => setAntiAliasing("smart")}
+                      onClick={() => handleAntiAliasingChange("smart")}
                     >
                       Smart
                     </Button>
@@ -74,7 +263,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={antiAliasing === "mid" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-l-none"
-                      onClick={() => setAntiAliasing("mid")}
+                      onClick={() => handleAntiAliasingChange("mid")}
                     >
                       Mid
                     </Button>
@@ -101,7 +290,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={noiseReduction === "off" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-r-none"
-                      onClick={() => setNoiseReduction("off")}
+                      onClick={() => handleNoiseReductionChange("off")}
                     >
                       Off
                     </Button>
@@ -109,7 +298,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={noiseReduction === "low" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-none"
-                      onClick={() => setNoiseReduction("low")}
+                      onClick={() => handleNoiseReductionChange("low")}
                     >
                       Low
                     </Button>
@@ -117,7 +306,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={noiseReduction === "high" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-l-none"
-                      onClick={() => setNoiseReduction("high")}
+                      onClick={() => handleNoiseReductionChange("high")}
                     >
                       High
                     </Button>
@@ -142,7 +331,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={upscaling === "off" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-r-none"
-                      onClick={() => setUpscaling("off")}
+                      onClick={() => handleUpscalingChange("off")}
                     >
                       Off
                     </Button>
@@ -150,7 +339,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={upscaling === "200%" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-none"
-                      onClick={() => setUpscaling("200%")}
+                      onClick={() => handleUpscalingChange("200%")}
                     >
                       200%
                     </Button>
@@ -158,7 +347,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={upscaling === "400%" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-l-none"
-                      onClick={() => setUpscaling("400%")}
+                      onClick={() => handleUpscalingChange("400%")}
                     >
                       400%
                     </Button>
@@ -211,7 +400,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={roundness === "sharp" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-r-none"
-                      onClick={() => setRoundness("sharp")}
+                      onClick={() => handleRoundnessChange("sharp")}
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -227,7 +416,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={roundness === "medium" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-none"
-                      onClick={() => setRoundness("medium")}
+                      onClick={() => handleRoundnessChange("medium")}
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -243,7 +432,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={roundness === "round" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-l-none"
-                      onClick={() => setRoundness("round")}
+                      onClick={() => handleRoundnessChange("round")}
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -276,7 +465,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={minimumArea === "0px²" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-r-none"
-                      onClick={() => setMinimumArea("0px²")}
+                      onClick={() => handleMinimumAreaChange("0px²")}
                     >
                       0px²
                     </Button>
@@ -284,7 +473,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={minimumArea === "5px²" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-none"
-                      onClick={() => setMinimumArea("5px²")}
+                      onClick={() => handleMinimumAreaChange("5px²")}
                     >
                       5px²
                     </Button>
@@ -292,7 +481,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={minimumArea === "90px²" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-l-none"
-                      onClick={() => setMinimumArea("90px²")}
+                      onClick={() => handleMinimumAreaChange("90px²")}
                     >
                       90px²
                     </Button>
@@ -319,7 +508,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={circleDetection === "off" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-r-none"
-                      onClick={() => setCircleDetection("off")}
+                      onClick={() => handleCircleDetectionChange("off")}
                     >
                       Off
                     </Button>
@@ -327,7 +516,7 @@ export function AdvancedOptions({ type }: AdvancedOptionsProps) {
                       variant={circleDetection === "on" ? "default" : "ghost"}
                       size="sm"
                       className="text-xs h-7 rounded-l-none"
-                      onClick={() => setCircleDetection("on")}
+                      onClick={() => handleCircleDetectionChange("on")}
                     >
                       On
                     </Button>

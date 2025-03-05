@@ -26,16 +26,16 @@ export class PaintByNumbersProcessor {
 
     // Draw contours
     const contourDrawer = new ContourDrawer(ctx, {
-      style: this.options.contourStyle || "solid",
+      style: this.options.contourStyle || "thick",
       color: this.options.contourColor || "#000000",
-      width: this.options.contourWidth || 1,
+      width: this.options.contourWidth || 2,
     });
     contourDrawer.drawContours(regions);
 
     // Place numbers
     const numberPlacer = new NumberPlacer(ctx, {
       style: this.options.numberStyle || "plain",
-      fontSize: this.options.fontSize || 12,
+      fontSize: this.options.fontSize || 16,
       fontFamily: this.options.fontFamily || "Arial",
       fontColor: this.options.fontColor || "#000000",
     });
